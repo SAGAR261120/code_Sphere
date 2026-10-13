@@ -1,0 +1,201 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --background: #f8fafc;
+    --foreground: #0f172a;
+    --card: #ffffff;
+    --card-foreground: #0f172a;
+    --border: #e2e8f0;
+    --muted: #f1f5f9;
+    --muted-foreground: #64748b;
+    --primary: #0284c7;
+    --primary-foreground: #ffffff;
+    --accent: #f59e0b;
+    --accent-foreground: #78350f;
+    --sidebar: #ffffff;
+    --sidebar-foreground: #0f172a;
+    --sidebar-border: #e2e8f0;
+  }
+
+  .dark {
+    --background: #080c14;
+    --foreground: #f1f5f9;
+    --card: #0e1524;
+    --card-foreground: #f1f5f9;
+    --border: #1e293b;
+    --muted: #131c31;
+    --muted-foreground: #94a3b8;
+    --primary: #38bdf8;
+    --primary-foreground: #080c14;
+    --accent: #fbbf24;
+    --accent-foreground: #451a03;
+    --sidebar: #0a0f1d;
+    --sidebar-foreground: #f1f5f9;
+    --sidebar-border: #1a2436;
+  }
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  min-height: 100vh;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.3);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.5);
+}
+
+/* Focus styles for accessibility */
+*:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 2px;
+}
+
+/* Glass effect utilities */
+.glass-panel {
+  background: rgba(14, 21, 36, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.light .glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* Coin shine animation */
+@keyframes coin-shimmer {
+  0% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(245, 158, 11, 0)); }
+  50% { transform: scale(1.05); filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.5)); }
+  100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(245, 158, 11, 0)); }
+}
+.animate-coin {
+  animation: coin-shimmer 2.5s infinite ease-in-out;
+}
+
+/* Page entrance transition */
+@keyframes pageFadeIn {
+  from {
+    opacity: 0.85;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.page-transition {
+  animation: pageFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, transform;
+}
+
+/* Modal and dialog animations */
+@keyframes modalBackdropFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes modalDialogScale {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.animate-modal-backdrop,
+.animate-in.fade-in {
+  animation: modalBackdropFade 0.18s ease-out forwards;
+}
+.animate-modal-dialog,
+.animate-in.zoom-in-95 {
+  animation: modalDialogScale 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Dropdown menu animation */
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.97) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.animate-dropdown {
+  animation: dropdownFadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  transform-origin: top right;
+}
+
+/* Slide over drawer animation */
+@keyframes slideInLeft {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.slide-in-from-left {
+  animation: slideInLeft 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Hero Carousel slide crossfade */
+@keyframes bannerFadeIn {
+  from {
+    opacity: 0.4;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-banner-fade {
+  animation: bannerFadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Interactive button micro-feedback */
+.btn-interactive {
+  transition: transform 0.15s ease-out, background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.btn-interactive:active {
+  transform: scale(0.96);
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .page-transition,
+  .animate-modal-backdrop,
+  .animate-modal-dialog,
+  .animate-dropdown,
+  .slide-in-from-left,
+  .animate-banner-fade,
+  .animate-coin {
+    animation: none !important;
+    transform: none !important;
+  }
+}

@@ -1,0 +1,905 @@
+// ==============================================================================
+// CPC Marketplace — Master Prisma Schema
+// Provider: PostgreSQL
+// Identifier Strategy: UUID
+// Financial Precision: Integer units for CPC Coins, Paise (Cents) for Fiat
+// ==============================================================================
+
+datasource db {
+  provider = "postgresql"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// -------------------------------------------------------------
+// ENUMS
+// -------------------------------------------------------------
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum RoleType {
+  SUPER_ADMIN
+  ADMIN
+  MODERATOR
+  PUBLISHER
+  USER
+}
+
+enum ProductStatus {
+  DRAFT
+  PENDING_REVIEW
+  PUBLISHED
+  REJECTED
+  ARCHIVED
+}
+
+enum DocumentType {
+  OVERVIEW
+  MANUAL
+  INSTALLATION_GUIDE
+  TECHNICAL_SPEC
+  API_DOC
+  LICENSE
+  CHANGELOG
+  RECEIPT
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+  REFUNDED
+}
+
+enum PaymentMethod {
+  FREE
+  COINS
+  FIAT
+  MIXED
+}
+
+enum DepositStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum TransactionType {
+  TASK_REWARD
+  PURCHASE_DEBIT
+  DEPOSIT_CREDIT
+  ADMIN_CREDIT
+  ADMIN_DEBIT
+  REFUND_CREDIT
+  PROMO_BONUS
+}
+
+enum TaskType {
+  VISIT
+  SIGNUP
+  WATCH
+  SOCIAL
+  TUTORIAL
+}
+
+enum VerificationMethod {
+  TIMER
+  CALLBACK
+  MANUAL
+}
+
+enum AttemptStatus {
+  STARTED
+  PENDING_VERIFICATION
+  COMPLETED
+  REJECTED
+  EXPIRED
+  FLAGGED_FRAUD
+}
+
+enum NotificationType {
+  PURCHASE_SUCCESS
+  TASK_REWARD
+  DEPOSIT_COMPLETED
+  SYSTEM_ALERT
+  REFUND_PROCESSED
+  PRODUCT_UPDATE
+  TASK_VERIFICATION
+  SECURITY_ALERT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// -------------------------------------------------------------
+// USER, PROFILE & AUTHENTICATION
+// -------------------------------------------------------------
+
+model User {
+  id                  String         @id @default(uuid())
+  email               String         @unique
+  passwordHash        String
+  status              AccountStatus  @default(ACTIVE)
+  isEmailVerified     Boolean        @default(false)
+  emailVerifyToken    String?
+  passwordResetToken  String?
+  passwordResetExpires DateTime?
+  failedLoginAttempts Int            @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  // Relationships
+  profile             UserProfile?
+  wallet              CoinWallet?
+  sessions            Session[]
+  userRoles           UserRole[]
+  publishedProducts   Product[]      @relation("PublisherProducts")
+  orders              Order[]
+  entitlements        PurchaseEntitlement[]
+  taskAttempts        TaskAttempt[]
+  taskCompletions     TaskCompletion[]
+  deposits            Deposit[]
+  reviews             ProductReview[]
+  reviewReports       ReviewReport[]
+  notifications       Notification[]
+  supportTickets      SupportTicket[]
+  auditLogs           AuditLog[]     @relation("AdminAudit")
+  coinTransactions    CoinTransaction[]
+  downloadEvents      DownloadEvent[]
+
+  @@index([status, createdAt])
+}
+
+model UserProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  username    String   @unique
+  displayName String
+  bio         String?
+  avatarUrl   String?
+  website     String?
+  githubUrl   String?
+  twitterUrl  String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([username])
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  sessionToken String   @unique
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+}
+
+// -------------------------------------------------------------
+// RBAC: ROLES & PERMISSIONS
+// -------------------------------------------------------------
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  slug        RoleType         @unique
+  description String?
+  isSystem    Boolean          @default(false)
+
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  userRoles   UserRole[]
+  permissions RolePermission[]
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  action      String           // e.g. "products:publish", "coins:adjust"
+  subject     String           // e.g. "Product", "CoinWallet"
+  description String?
+
+  createdAt   DateTime         @default(now())
+
+  roles       RolePermission[]
+
+  @@unique([action, subject])
+}
+
+model RolePermission {
+  id           String     @id @default(uuid())
+  roleId       String
+  permissionId String
+
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+  @@index([userId])
+}
+
+// -------------------------------------------------------------
+// WALLET & IMMUTABLE COIN LEDGER
+// -------------------------------------------------------------
+
+model CoinWallet {
+  id               String            @id @default(uuid())
+  userId           String            @unique
+  availableBalance Int               @default(0) // non-negative stored integer
+  totalEarned      Int               @default(0)
+  totalSpent       Int               @default(0)
+  lockedBalance    Int               @default(0)
+  version          Int               @default(1) // Optimistic concurrency control
+
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions     CoinTransaction[]
+
+  @@index([userId])
+}
+
+model CoinTransaction {
+  id             String          @id @default(uuid())
+  walletId       String
+  userId         String
+  amount         Int             // positive for credit, negative for debit
+  balanceAfter   Int             // snapshot immediately after transaction
+  type           TransactionType
+  description    String
+  idempotencyKey String          @unique // unique transaction deduplication token
+
+  referenceId    String?         // polymorphic pointer (orderId, attemptId, depositId)
+  referenceType  String?         // "Order", "TaskAttempt", "Deposit", "Admin"
+
+  createdAt      DateTime        @default(now())
+
+  wallet         CoinWallet      @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([referenceId, referenceType])
+}
+
+// -------------------------------------------------------------
+// FIAT DEPOSITS & PAYMENT WEBHOOKS
+// -------------------------------------------------------------
+
+model Deposit {
+  id               String        @id @default(uuid())
+  userId           String
+  amountFiatPaise  Int           // INR in paise (e.g. 49900 = ₹499.00)
+  coinsToCredit    Int           // Corresponding CPC Coins
+  gateway          String        @default("RAZORPAY")
+  gatewayOrderId   String?       @unique
+  gatewayPaymentId String?       @unique
+  status           DepositStatus @default(PENDING)
+  failureReason    String?
+  idempotencyKey   String?       @unique
+
+  createdAt        DateTime      @default(now())
+  completedAt      DateTime?
+
+  user             User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([gatewayOrderId])
+}
+
+model PaymentWebhookEvent {
+  id             String   @id @default(uuid())
+  gateway        String   // "RAZORPAY", "STRIPE"
+  eventId        String   @unique
+  eventType      String   // "payment.captured", "payment.failed"
+  rawPayload     Json
+  signature      String
+  processed      Boolean  @default(false)
+  processedAt    DateTime?
+  errorMessage   String?
+
+  createdAt      DateTime @default(now())
+
+  @@index([gateway, eventId])
+  @@index([processed])
+}
+
+// -------------------------------------------------------------
+// PRODUCT CATALOG & ASSET SPECIFICATIONS
+// -------------------------------------------------------------
+
+model ProductCategory {
+  id           String    @id @default(uuid())
+  name         String    @unique
+  slug         String    @unique
+  description  String?
+  icon         String?
+  displayOrder Int       @default(0)
+  isActive     Boolean   @default(true)
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  products     Product[]
+
+  @@index([slug, isActive])
+}
+
+model Product {
+  id                   String            @id @default(uuid())
+  title                String
+  slug                 String            @unique
+  shortDescription     String
+  description          String
+  categoryId           String
+  publisherId          String
+  status               ProductStatus     @default(DRAFT)
+  rejectionReason      String?
+
+  // Pricing configuration
+  isFree               Boolean           @default(false)
+  coinPrice            Int               @default(0)
+  fiatPricePaise       Int               @default(0)
+  hasMixedPricing      Boolean           @default(false)
+  mixedCoinsPrice      Int               @default(0)
+  mixedFiatPaise       Int               @default(0)
+
+  // External links
+  demoUrl              String?
+  videoUrl             String?
+
+  // Categorization & discovery tags
+  tags                 String[]
+  techStack            String[]
+  platforms            String[]          // "Web", "iOS", "Android", "Linux"
+  isFeatured           Boolean           @default(false)
+  featuredUntil        DateTime?
+
+  // Aggregated metrics
+  totalSales           Int               @default(0)
+  downloadCount        Int               @default(0)
+  viewCount            Int               @default(0)
+
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  // Relations
+  category             ProductCategory   @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  publisher            User              @relation("PublisherProducts", fields: [publisherId], references: [id], onDelete: Restrict)
+  images               ProductImage[]
+  versions             ProductVersion[]
+  features             ProductFeature[]
+  rating               ProductRating?
+  reviews              ProductReview[]
+  orderItems           OrderItem[]
+  entitlements         PurchaseEntitlement[]
+  documentations       ProductDocumentation[]
+
+  @@index([status, isFeatured, createdAt(sort: Desc)])
+  @@index([categoryId, status])
+  @@index([slug])
+}
+
+model ProductImage {
+  id           String   @id @default(uuid())
+  productId    String
+  url          String
+  alt          String?
+  isThumbnail  Boolean  @default(false)
+  displayOrder Int      @default(0)
+
+  createdAt    DateTime @default(now())
+
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, isThumbnail])
+}
+
+model ProductVersion {
+  id                String        @id @default(uuid())
+  productId         String
+  version           String        // e.g. "1.2.0"
+  changelogMarkdown String?
+  setupGuideMarkdown String?
+  isCurrent         Boolean       @default(false)
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  product           Product       @relation(fields: [productId], references: [id], onDelete: Cascade)
+  files             ProductFile[]
+  orderItems        OrderItem[]
+
+  @@unique([productId, version])
+  @@index([productId, isCurrent])
+}
+
+model ProductFile {
+  id             String         @id @default(uuid())
+  versionId      String
+  storageKey     String         // Object storage key in private bucket
+  fileName       String
+  fileSizeBytes  BigInt
+  mimeType       String         @default("application/zip")
+  sha256Checksum String
+
+  createdAt      DateTime       @default(now())
+
+  version        ProductVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  downloadEvents DownloadEvent[]
+
+  @@index([versionId])
+}
+
+model ProductFeature {
+  id           String   @id @default(uuid())
+  productId    String
+  title        String
+  description  String?
+  icon         String?
+  displayOrder Int      @default(0)
+
+  createdAt    DateTime @default(now())
+
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+}
+
+model ProductDocumentation {
+  id             String       @id @default(uuid())
+  productId      String
+  title          String
+  documentType   DocumentType @default(OVERVIEW)
+  version        String       @default("1.0.0")
+  fileName       String
+  fileSizeBytes  BigInt       @default(0)
+  mimeType       String       @default("application/pdf")
+  language       String       @default("English")
+  isPublic       Boolean      @default(false)
+  storageKey     String
+  contentSummary String?
+  downloadCount  Int          @default(0)
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  product        Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId, isPublic])
+  @@index([documentType])
+}
+
+model ProductRating {
+  id            String   @id @default(uuid())
+  productId     String   @unique
+  averageRating Float    @default(0.0)
+  reviewCount   Int      @default(0)
+  oneStarCount  Int      @default(0)
+  twoStarCount  Int      @default(0)
+  threeStarCount Int     @default(0)
+  fourStarCount Int      @default(0)
+  fiveStarCount Int      @default(0)
+
+  updatedAt     DateTime @updatedAt
+
+  product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+}
+
+model ProductReview {
+  id                 String   @id @default(uuid())
+  productId          String
+  userId             String
+  rating             Int      // 1 to 5
+  title              String?
+  content            String
+  isVerifiedPurchase Boolean  @default(true)
+  isApproved         Boolean  @default(true)
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  product            Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports            ReviewReport[]
+
+  @@unique([userId, productId])
+  @@index([productId, isApproved, rating])
+}
+
+// -------------------------------------------------------------
+// ORDERS, ITEMS & PURCHASE ENTITLEMENTS
+// -------------------------------------------------------------
+
+model Order {
+  id             String         @id @default(uuid())
+  orderNumber    String         @unique // formatted e.g. CPC-202610-8921
+  userId         String
+  totalCoins     Int            @default(0)
+  totalFiatPaise Int            @default(0)
+  paymentMethod  PaymentMethod
+  status         OrderStatus    @default(COMPLETED)
+  idempotencyKey String?        @unique
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Restrict)
+  items          OrderItem[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([orderNumber])
+}
+
+model OrderItem {
+  id              String               @id @default(uuid())
+  orderId         String
+  productId       String
+  versionId       String
+  priceCoins      Int                  @default(0)
+  priceFiatPaise  Int                  @default(0)
+  licenseType     String               @default("COMMERCIAL")
+
+  createdAt       DateTime             @default(now())
+
+  order           Order                @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product         Product              @relation(fields: [productId], references: [id], onDelete: Restrict)
+  version         ProductVersion       @relation(fields: [versionId], references: [id], onDelete: Restrict)
+  entitlement     PurchaseEntitlement?
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model PurchaseEntitlement {
+  id               String          @id @default(uuid())
+  orderItemId      String          @unique
+  userId           String
+  productId        String
+  licenseKey       String          @unique // e.g. CPC-LIC-NOVA-89A4B-2026
+  maxDownloads     Int             @default(10)
+  downloadCount    Int             @default(0)
+  lastDownloadedAt DateTime?
+  isRevoked        Boolean         @default(false)
+  revocationReason String?
+
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  orderItem        OrderItem       @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  product          Product         @relation(fields: [productId], references: [id], onDelete: Restrict)
+  downloadEvents   DownloadEvent[]
+
+  @@unique([userId, productId])
+  @@index([userId, isRevoked])
+}
+
+model DownloadEvent {
+  id                   String              @id @default(uuid())
+  entitlementId        String
+  userId               String
+  fileId               String
+  clientIp             String?
+  userAgent            String?
+  presignedUrlExpiresAt DateTime
+
+  createdAt            DateTime            @default(now())
+
+  entitlement          PurchaseEntitlement @relation(fields: [entitlementId], references: [id], onDelete: Cascade)
+  user                 User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  file                 ProductFile         @relation(fields: [fileId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([entitlementId])
+}
+
+// -------------------------------------------------------------
+// REWARD TASKS, BUDGETS & ANTI-FRAUD
+// -------------------------------------------------------------
+
+model RewardTask {
+  id                     String             @id @default(uuid())
+  title                  String
+  slug                   String             @unique
+  description            String
+  instructionsMarkdown   String
+  rewardCoins            Int
+  taskType               TaskType           @default(VISIT)
+  verificationMethod     VerificationMethod @default(TIMER)
+  requiredDurationSeconds Int              @default(30)
+  cooldownHours          Int                @default(24)
+  targetUrl              String?
+  providerId             String?
+  category               String             @default("General")
+  difficulty             String             @default("Quick")
+  isActive               Boolean            @default(true)
+
+  createdAt              DateTime           @default(now())
+  updatedAt              DateTime           @updatedAt
+
+  provider               TaskProvider?      @relation(fields: [providerId], references: [id], onDelete: SetNull)
+  media                  TaskMedia[]
+  rules                  RewardRule[]
+  budget                 RewardBudget?
+  attempts               TaskAttempt[]
+  completions            TaskCompletion[]
+
+  @@index([isActive, createdAt(sort: Desc)])
+}
+
+model TaskMedia {
+  id           String     @id @default(uuid())
+  taskId       String
+  mediaType    String     // "IMAGE", "VIDEO"
+  url          String
+  caption      String?
+  displayOrder Int        @default(0)
+
+  task         RewardTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model TaskProvider {
+  id               String              @id @default(uuid())
+  name             String              // "GPLinks", "ShrinkMe", "Signed Postback"
+  slug             String              @unique
+  baseUrl          String
+  apiKey           String?             // Server-side API token (stored encrypted/hidden from client)
+  webhookSecret    String?             // Callback HMAC signature secret
+  campaignId       String?             // Provider campaign/task ID
+  permittedDomains String[]            @default([]) // Permitted destination domains
+  verificationType String              @default("SIGNED_POSTBACK") // "SIGNED_POSTBACK" | "API_POLL" | "MANUAL_REVIEW"
+  config           Json?               // Redacted extra provider settings
+  isEnabled        Boolean             @default(true)
+
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  tasks            RewardTask[]
+  events           TaskCallbackEvent[]
+}
+
+model TaskCallbackEvent {
+  id                 String        @id @default(uuid())
+  providerId         String?
+  providerSlug       String
+  providerEventId    String?       // External event ID or reference
+  attemptId          String?
+  clientIp           String?
+  signature          String?
+  verificationResult String        // "VERIFIED", "REJECTED", "DUPLICATE", "INVALID_SIGNATURE", "EXPIRED", "UNSUPPORTED"
+  rejectionReason    String?
+  rewardStatus       String        // "REWARDED", "ALREADY_COMPLETED", "FAILED", "PENDING_REVIEW", "NONE"
+  metadata           Json?         // Safe, redacted payload
+  createdAt          DateTime      @default(now())
+
+  provider           TaskProvider? @relation(fields: [providerId], references: [id], onDelete: SetNull)
+
+  @@index([providerSlug, createdAt(sort: Desc)])
+  @@index([attemptId])
+  @@index([providerEventId])
+}
+
+model TaskAttempt {
+  id               String          @id @default(uuid())
+  taskId           String
+  userId           String
+  sessionToken     String          @unique // cryptographically signed token
+  shortUrl         String?         // Generated short-link for this attempt
+  providerEventId  String?         // External provider event reference
+  status           AttemptStatus   @default(STARTED)
+  timeSpentSeconds Int?
+  clientIp         String?
+  userAgent        String?
+  fraudFlags       String[]        // e.g. ["IP_MISMATCH", "INSUFFICIENT_TIME"]
+
+  createdAt        DateTime        @default(now())
+  completedAt      DateTime?
+
+  task             RewardTask      @relation(fields: [taskId], references: [id], onDelete: Restrict)
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completion       TaskCompletion?
+
+  @@index([userId, taskId, createdAt(sort: Desc)])
+  @@index([sessionToken])
+  @@index([providerEventId])
+}
+
+model TaskCompletion {
+  id                    String      @id @default(uuid())
+  attemptId             String      @unique
+  userId                String
+  taskId                String
+  rewardCoins           Int
+  verificationReference String?     @unique // prevents callback replay
+  completedAt           DateTime    @default(now())
+
+  attempt               TaskAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  user                  User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  task                  RewardTask  @relation(fields: [taskId], references: [id], onDelete: Restrict)
+
+  @@index([userId, completedAt(sort: Desc)])
+  @@index([taskId])
+}
+
+model RewardRule {
+  id                   String     @id @default(uuid())
+  taskId               String
+  minUserAgeDays       Int        @default(0)
+  maxDailyCompletions  Int        @default(1)
+  allowedCountries     String[]
+
+  task                 RewardTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId])
+}
+
+model RewardBudget {
+  id                 String     @id @default(uuid())
+  taskId             String     @unique
+  totalAllocatedCoins Int       @default(10000)
+  totalSpentCoins    Int        @default(0)
+  isExhausted        Boolean    @default(false)
+
+  updatedAt          DateTime   @updatedAt
+
+  task               RewardTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+}
+
+// -------------------------------------------------------------
+// CAMPAIGNS, NOTIFICATIONS, TICKETS, AUDIT & SETTINGS
+// -------------------------------------------------------------
+
+model Coupon {
+  id              String    @id @default(uuid())
+  code            String    @unique
+  discountCoins   Int       @default(0)
+  discountPercent Float     @default(0.0)
+  maxUses         Int       @default(100)
+  currentUses     Int       @default(0)
+  isActive        Boolean   @default(true)
+  expiresAt       DateTime?
+
+  createdAt       DateTime  @default(now())
+
+  @@index([code, isActive])
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  actionUrl String?
+  isRead    Boolean          @default(false)
+
+  createdAt DateTime         @default(now())
+
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt(sort: Desc)])
+}
+
+model SupportTicket {
+  id           String         @id @default(uuid())
+  ticketNumber String         @unique
+  userId       String
+  subject      String
+  category     String
+  status       TicketStatus   @default(OPEN)
+  priority     TicketPriority @default(MEDIUM)
+  message      String
+
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([ticketNumber])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  adminId    String
+  action     String   // e.g. "COIN_ADJUSTMENT", "PRODUCT_APPROVAL", "USER_SUSPENSION"
+  targetType String   // "User", "Product", "CoinWallet", "Order"
+  targetId   String
+  reason     String?
+  ipAddress  String?
+  metadata   Json?    // before and after state diff
+
+  createdAt  DateTime @default(now())
+
+  admin      User     @relation("AdminAudit", fields: [adminId], references: [id], onDelete: Restrict)
+
+  @@index([adminId, createdAt(sort: Desc)])
+  @@index([targetType, targetId])
+}
+
+model PlatformSetting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  isPublic    Boolean  @default(false)
+  category    String   @default("GENERAL")
+
+  updatedAt   DateTime @updatedAt
+
+  @@index([key, isPublic])
+}
+
+model ReviewReport {
+  id        String        @id @default(uuid())
+  reviewId  String
+  userId    String
+  reason    String
+  status    String        @default("PENDING") // PENDING, RESOLVED, DISMISSED
+  createdAt DateTime      @default(now())
+
+  review    ProductReview @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reviewId])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([reviewId])
+}
+
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  eventType String   // "SEARCH", "PRODUCT_VIEW", "PURCHASE_INTENT", "PURCHASE", "DOWNLOAD", "TASK_ENGAGE"
+  userId    String?
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([eventType, createdAt(sort: Desc)])
+  @@index([entityId, eventType])
+}
+
