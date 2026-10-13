@@ -958,44 +958,28 @@ export class TaskService {
   }
 
   /**
-   * Archives or deletes a task.
+   * Permanently deletes a task and all associated attempts, completions, media, rules, and budget.
    */
-  static async adminArchiveTask(adminId: string, taskId: string) {
+  static async adminDeleteTask(adminId: string, taskId: string) {
     const task = await prisma.rewardTask.findUnique({
       where: { id: taskId },
-      include: { _count: { select: { completions: true } } },
+      include: {
+        _count: {
+          select: { completions: true, attempts: true },
+        },
+      },
     });
 
     if (!task) {
       throw new ApiError(404, 'Task not found', 'TASK_NOT_FOUND');
     }
 
-    // If has completions, preserve historical financial record by archiving (isActive = false)
-    if (task._count.completions > 0) {
-      await prisma.rewardTask.update({
-        where: { id: taskId },
-        data: { isActive: false },
-      });
-
-      await prisma.auditLog.create({
-        data: {
-          adminId,
-          action: 'ARCHIVE_TASK',
-          targetType: 'RewardTask',
-          targetId: taskId,
-          reason: `Archived task "${task.title}" with ${task._count.completions} existing completions`,
-        },
-      });
-
-      return { archived: true, deleted: false };
-    }
-
-    // If 0 completions, delete cleanly
     await prisma.$transaction([
+      prisma.taskCompletion.deleteMany({ where: { taskId } }),
+      prisma.taskAttempt.deleteMany({ where: { taskId } }),
       prisma.taskMedia.deleteMany({ where: { taskId } }),
       prisma.rewardRule.deleteMany({ where: { taskId } }),
       prisma.rewardBudget.deleteMany({ where: { taskId } }),
-      prisma.taskAttempt.deleteMany({ where: { taskId } }),
       prisma.rewardTask.delete({ where: { id: taskId } }),
     ]);
 
@@ -1005,11 +989,18 @@ export class TaskService {
         action: 'DELETE_TASK',
         targetType: 'RewardTask',
         targetId: taskId,
-        reason: `Deleted uncompleted task "${task.title}"`,
+        reason: `Permanently deleted task "${task.title}" (${task._count.completions} completions, ${task._count.attempts} attempts)`,
       },
     });
 
-    return { archived: false, deleted: true };
+    return { deleted: true, taskId, title: task.title };
+  }
+
+  /**
+   * Archives or deletes a task (delegates to adminDeleteTask).
+   */
+  static async adminArchiveTask(adminId: string, taskId: string) {
+    return this.adminDeleteTask(adminId, taskId);
   }
 
   /**

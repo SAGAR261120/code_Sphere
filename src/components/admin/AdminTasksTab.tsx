@@ -268,17 +268,24 @@ export function AdminTasksTab({ addToast }: Props) {
     }
   };
 
-  const handleArchive = async (task: AdminTask) => {
-    if (!confirm(`Are you sure you want to archive or remove task "${task.title}"?`)) return;
+  const handleDelete = async (task: AdminTask) => {
+    if (!confirm(`Are you sure you want to permanently delete task "${task.title}"? This action cannot be undone.`)) return;
+
+    // Optimistically remove from list immediately
+    const previousTasks = [...tasks];
+    setTasks((prev) => prev.filter((t) => t.id !== task.id));
 
     try {
       const res = await fetch(`/api/v1/admin/tasks/${task.id}`, {
         method: 'DELETE',
       });
       const json = await res.json();
-      if (!res.ok) throw new Error(json.error?.message || 'Failed to archive task');
+      if (!res.ok) {
+        setTasks(previousTasks);
+        throw new Error(json.error?.message || 'Failed to delete task');
+      }
 
-      addToast('Archived', json.message || 'Task archived successfully.', 'success');
+      addToast('Task Deleted', `Task "${task.title}" was permanently deleted.`, 'success');
       fetchData();
     } catch (err: any) {
       addToast('Error', err.message, 'error');
@@ -502,9 +509,9 @@ export function AdminTasksTab({ addToast }: Props) {
 
                           <button
                             type="button"
-                            onClick={() => handleArchive(task)}
+                            onClick={() => handleDelete(task)}
                             className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                            title="Archive Task"
+                            title="Delete Task"
                           >
                             <Trash2 size={15} />
                           </button>

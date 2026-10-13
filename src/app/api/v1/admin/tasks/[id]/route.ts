@@ -28,11 +28,11 @@ export async function DELETE(req: NextRequest, props: RouteParams) {
     const admin = await requireRole(req, ["ADMIN", "SUPER_ADMIN"]);
     const { id } = await props.params;
 
-    const result = await TaskService.adminArchiveTask(admin.id, id);
+    const result = await TaskService.adminDeleteTask(admin.id, id);
 
     return ApiResponse.success(
       result,
-      result.deleted ? "Task deleted successfully" : "Task archived successfully",
+      "Task deleted successfully",
       200
     );
   } catch (error) {
