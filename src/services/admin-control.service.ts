@@ -19,7 +19,7 @@ const DEFAULT_PLATFORM_SETTINGS: Array<{
   // GENERAL
   {
     key: "PLATFORM_NAME",
-    value: "CPC Marketplace",
+    value: "Code Sphere",
     description: "Official marketplace brand title displayed across headers and metadata",
     category: "GENERAL",
     isPublic: true,

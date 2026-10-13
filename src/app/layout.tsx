@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'CPC Marketplace — Applications, Websites & Digital Products Store',
+  title: 'Code Sphere — Applications, Websites & Digital Products Store',
   description:
     'Discover, acquire, and download web applications, mobile apps, SaaS starter kits, and digital source code using CPC Coins and verified payment rails.',
   keywords: [

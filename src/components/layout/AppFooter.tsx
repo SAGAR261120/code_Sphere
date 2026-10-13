@@ -11,10 +11,10 @@ export function AppFooter() {
           <div className="space-y-2 md:col-span-1">
             <div className="flex items-center gap-2">
               <span className="w-6 h-6 rounded-lg bg-sky-500 flex items-center justify-center text-white font-black text-xs">
-                C
+                CS
               </span>
               <span className="font-bold text-sm tracking-tight text-slate-900 dark:text-slate-100">
-                CPC Marketplace
+                Code Sphere
               </span>
             </div>
             <p className="text-slate-500 dark:text-slate-400 leading-relaxed">
@@ -108,7 +108,7 @@ export function AppFooter() {
 
         <div className="pt-6 border-t border-slate-200 dark:border-slate-800/60 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-400">
           <div>
-            &copy; 2026 CPC Marketplace &bull; AstraNova Technologies. All rights reserved.
+            &copy; 2026 Code Sphere &bull; AstraNova Technologies. All rights reserved.
           </div>
           <div className="flex items-center gap-4">
             <Link href="/terms" className="hover:underline">Terms</Link>

@@ -112,10 +112,10 @@ export function MobileNavigation({ isOpen, onClose }: MobileNavigationProps) {
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-sky-600 to-amber-500 flex items-center justify-center text-white font-bold text-xs">
-                  CPC
+                  CS
                 </div>
                 <span className="font-bold text-sm text-slate-900 dark:text-white">
-                  CPC Market
+                  Code Sphere
                 </span>
               </div>
               <button
@@ -188,7 +188,7 @@ export function MobileNavigation({ isOpen, onClose }: MobileNavigationProps) {
 
             {/* Footer */}
             <div className="pt-4 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 text-center">
-              CPC Marketplace &copy; 2026 AstraNova
+              Code Sphere &copy; 2026 AstraNova
             </div>
           </div>
         </div>

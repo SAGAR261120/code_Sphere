@@ -68,13 +68,13 @@ export function AppHeader({ onToggleMobileNav }: { onToggleMobileNav: () => void
           >
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-sky-600 via-indigo-600 to-amber-500 p-0.5 shadow-md shadow-sky-500/20 group-hover:scale-105 transition-transform">
               <div className="w-full h-full bg-slate-900 rounded-[10px] flex items-center justify-center text-white font-black text-sm">
-                CPC
+                CS
               </div>
             </div>
             <div className="hidden sm:flex flex-col">
               <div className="flex items-center gap-1.5">
                 <span className="font-bold text-base tracking-tight text-slate-900 dark:text-white">
-                  CPC Market
+                  Code Sphere
                 </span>
                 <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
                   PRO

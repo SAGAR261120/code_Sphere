@@ -62,7 +62,7 @@ export default function RegisterPage() {
             <span>Welcome Bonus: 50 Free CPC Coins</span>
           </div>
           <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-            Join CPC Marketplace
+            Join Code Sphere
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
             Discover web applications, templates, and mobile codebases.

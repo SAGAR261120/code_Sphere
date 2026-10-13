@@ -50,7 +50,7 @@ function LoginForm() {
           <ShieldCheck className="w-7 h-7" />
         </div>
         <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-          Sign In to CPC Marketplace
+          Sign In to Code Sphere
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
           Access your digital software vault, wallet, and rewards.
